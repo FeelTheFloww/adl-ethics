@@ -1,0 +1,12 @@
+﻿venv/
+__pycache__/
+*.pyc
+*.pyo
+.cache/
+*.log
+kaggle_upload/
+kaggle_upload.zip
+results/*/checkpoint-*/
+data/preferences.jsonl
+data/synthetic_ethics.jsonl
+wandb/

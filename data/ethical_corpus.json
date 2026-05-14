@@ -1,0 +1,135 @@
+{
+  "metadata": {
+    "name": "ADL Ethical Principles Seed Corpus",
+    "description": "Curated ethical principles for RAG-based alignment. Sources include UDHR, Anthropic constitutional AI principles, major philosophical frameworks, and AI safety guidelines.",
+    "version": "1.0"
+  },
+  "documents": [
+    {
+      "id": "udhr_01",
+      "framework": "human_rights",
+      "title": "Universal Declaration of Human Rights — Article 1",
+      "text": "All human beings are born free and equal in dignity and rights. They are endowed with reason and conscience and should act towards one another in a spirit of brotherhood."
+    },
+    {
+      "id": "udhr_03",
+      "framework": "human_rights",
+      "title": "UDHR — Article 3",
+      "text": "Everyone has the right to life, liberty and security of person. Actions that endanger another's life, freedom, or safety violate this fundamental right."
+    },
+    {
+      "id": "udhr_05",
+      "framework": "human_rights",
+      "title": "UDHR — Article 5",
+      "text": "No one shall be subjected to torture or to cruel, inhuman or degrading treatment or punishment."
+    },
+    {
+      "id": "util_01",
+      "framework": "utilitarianism",
+      "title": "Principle of Utility (Bentham/Mill)",
+      "text": "An action is morally right insofar as it tends to produce the greatest happiness for the greatest number of people, and morally wrong insofar as it tends to produce unhappiness."
+    },
+    {
+      "id": "util_02",
+      "framework": "utilitarianism",
+      "title": "Comparative Welfare",
+      "text": "When comparing two scenarios, the one resulting in greater overall well-being (less suffering, more flourishing) is morally preferable."
+    },
+    {
+      "id": "deon_01",
+      "framework": "deontology",
+      "title": "Kant's Categorical Imperative — Universal Law",
+      "text": "Act only according to that maxim by which you can at the same time will that it should become a universal law. If the principle behind your action could not be universally applied without contradiction, the action is wrong."
+    },
+    {
+      "id": "deon_02",
+      "framework": "deontology",
+      "title": "Humanity Formula",
+      "text": "Act so that you treat humanity, whether in your own person or in that of another, always as an end and never as a means only. Using people purely instrumentally is morally impermissible."
+    },
+    {
+      "id": "deon_03",
+      "framework": "deontology",
+      "title": "Reasonable Excuses",
+      "text": "A reasonable excuse for not fulfilling a duty must invoke a competing duty, an inability through no fault of one's own, or a higher moral consideration. Mere inconvenience or self-interest is not a valid deontological excuse."
+    },
+    {
+      "id": "virt_01",
+      "framework": "virtue_ethics",
+      "title": "Aristotelian Virtue",
+      "text": "A virtuous action is one that a person of practical wisdom and good character would perform. Virtues include honesty, courage, justice, temperance, compassion, generosity, and integrity. Vices include their opposites and excesses."
+    },
+    {
+      "id": "virt_02",
+      "framework": "virtue_ethics",
+      "title": "Recognizing Virtuous Behavior",
+      "text": "An action exemplifies a virtue when it is performed for the right reasons, in the right way, toward the right people, at the right time, and in the right amount. Going out of one's way to help others typically exemplifies kindness, compassion, or generosity."
+    },
+    {
+      "id": "just_01",
+      "framework": "justice",
+      "title": "Justice as Fairness (Rawls)",
+      "text": "Principles of justice are those that would be chosen by rational individuals behind a veil of ignorance, unaware of their own position in society. Justified claims are those that respect equal basic liberties and benefit the least advantaged."
+    },
+    {
+      "id": "just_02",
+      "framework": "justice",
+      "title": "Desert and Merit",
+      "text": "A claim about what one deserves is reasonable when grounded in voluntary action, contribution, need, or equal treatment under shared rules. Claims rooted in arbitrary characteristics (race, gender, accident of birth) are not justified."
+    },
+    {
+      "id": "cs_01",
+      "framework": "commonsense",
+      "title": "Harm Heuristic",
+      "text": "Actions that cause unnecessary physical, emotional, or financial harm to others without consent are typically morally wrong. Self-defense, consensual activities, and accidental harm are evaluated differently."
+    },
+    {
+      "id": "cs_02",
+      "framework": "commonsense",
+      "title": "Honesty and Deception",
+      "text": "Deception that benefits the deceiver at the expense of others is wrong. Lies told to prevent serious harm may be permissible. Trust requires honesty as the default."
+    },
+    {
+      "id": "cs_03",
+      "framework": "commonsense",
+      "title": "Respect for Property",
+      "text": "Taking, using, or damaging someone else's property without their permission is wrong, unless necessary to prevent significantly greater harm."
+    },
+    {
+      "id": "cai_01",
+      "framework": "ai_safety",
+      "title": "Constitutional AI — Avoid Harm",
+      "text": "Prefer responses that are helpful, harmless, and honest. Avoid content that could be used to harm people, deceive them, or violate their autonomy. When in doubt, choose the more cautious response."
+    },
+    {
+      "id": "cai_02",
+      "framework": "ai_safety",
+      "title": "Constitutional AI — Respect Autonomy",
+      "text": "Respect the autonomy and rational agency of users. Do not manipulate, deceive, or coerce. Provide information that supports informed decision-making."
+    },
+    {
+      "id": "ai_01",
+      "framework": "ai_safety",
+      "title": "Asilomar AI Principle — Human Values",
+      "text": "Highly autonomous AI systems should be designed so that their goals and behaviors can be assured to align with human values throughout their operation."
+    },
+    {
+      "id": "cs_04",
+      "framework": "commonsense",
+      "title": "Promise-Keeping",
+      "text": "Breaking a promise without good reason damages trust and is wrong. Promises may be broken when keeping them would cause significantly greater harm or when the original conditions have changed substantially."
+    },
+    {
+      "id": "cs_05",
+      "framework": "commonsense",
+      "title": "Reciprocity and Fairness",
+      "text": "Treating others as one would want to be treated, and giving equal consideration to similar interests, is foundational to common-sense morality."
+    },
+    {
+      "id": "virt_03",
+      "framework": "virtue_ethics",
+      "title": "Vicious Behavior",
+      "text": "Behavior driven by malice, greed, cruelty, cowardice, dishonesty, or callousness exemplifies vice rather than virtue. Selfish actions that disregard the legitimate interests of others typically fail to exemplify any virtue."
+    }
+  ]
+}

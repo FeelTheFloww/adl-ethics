@@ -22,7 +22,7 @@ import faiss
 
 
 def load_corpus(path: str) -> list[dict]:
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         data = json.load(f)
     docs = data.get("documents", [])
     print(f"Loaded {len(docs)} documents from {path}")
@@ -50,7 +50,7 @@ def build_index(docs: list[dict], embedder_name: str, out_dir: str):
     faiss.write_index(index, os.path.join(out_dir, "index.faiss"))
     with open(os.path.join(out_dir, "docs.pkl"), "wb") as f:
         pickle.dump(docs, f)
-    with open(os.path.join(out_dir, "meta.json"), "w") as f:
+    with open(os.path.join(out_dir, "meta.json"), "w", encoding="utf-8") as f:
         json.dump({"embedder": embedder_name, "n_docs": len(docs), "dim": dim}, f, indent=2)
     print(f"Saved index + docs -> {out_dir}")
 

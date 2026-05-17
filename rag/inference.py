@@ -25,7 +25,7 @@ import faiss
 class EthicsRetriever:
     def __init__(self, index_dir: str, embedder_name: Optional[str] = None):
         self.index_dir = index_dir
-        with open(os.path.join(index_dir, "meta.json")) as f:
+        with open(os.path.join(index_dir, "meta.json"), encoding="utf-8") as f:
             meta = json.load(f)
         self.embedder_name = embedder_name or meta["embedder"]
         print(f"[RAG] Loading embedder: {self.embedder_name}")
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     print(f"\nTop-{args.k} retrieved for: {args.query!r}\n")
     for r in results:
         print(f"  [{r['score']:.3f}] ({r['framework']}) {r['title']}")
-        print(f"     {r['text'][:140]}…\n")
+        print(f"     {r['text'][:140]}...\n")
 
-    print("─── Augmented prompt ───")
+    print("--- Augmented prompt ---")
     print(retriever.augment_prompt(args.query, k=args.k))

@@ -105,11 +105,32 @@ def call_openai(system: str, user: str, model: str = "gpt-4o-mini") -> Optional[
     return resp.choices[0].message.content
 
 
+def call_groq(system: str, user: str, model: str = "llama-3.3-70b-versatile") -> Optional[str]:
+    """Groq free tier: ~14K requests/day, Llama-3.3-70B, very fast."""
+    from openai import OpenAI
+    client = OpenAI(
+        api_key=os.environ.get("GROQ_API_KEY"),
+        base_url="https://api.groq.com/openai/v1",
+    )
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        max_tokens=512,
+        temperature=0.8,
+    )
+    return resp.choices[0].message.content
+
+
 def call_llm(provider: str, system: str, user: str) -> Optional[str]:
     if provider == "anthropic":
         return call_anthropic(system, user)
     if provider == "openai":
         return call_openai(system, user)
+    if provider == "groq":
+        return call_groq(system, user)
     raise ValueError(f"Unknown provider: {provider}")
 
 
@@ -145,7 +166,7 @@ def parse_pair(raw: str) -> Optional[dict]:
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--provider", choices=["anthropic", "openai"], default="anthropic")
+    parser.add_argument("--provider", choices=["anthropic", "openai", "groq"], default="groq")
     parser.add_argument("--n", type=int, default=3000)
     parser.add_argument("--out_path", type=str, default="data/synthetic_ethics.jsonl")
     parser.add_argument("--seed", type=int, default=42)

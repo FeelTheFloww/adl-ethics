@@ -1,56 +1,37 @@
-"""
-training/train_ppo.py
-─────────────────────
-RLHF étape 2 : PPO sur policy warm-startée depuis le DPO adapter, scorée par le
-reward model. API TRL 0.12 (PPOTrainer.train() unifié).
+"""Étape PPO du pipeline RLHF (TRL 0.12).
 
-Conçu pour tourner sur Kaggle T4 (16 GB) avec bnb 4-bit.
+Pipeline : (1) data  →  (2) DPO  →  (3) reward model  →  [4] PPO  →  (5) eval
+Entrées  : results/dpo_model/   (warm-start de la policy et de la référence)
+           results/reward_model/ (reward + value model warm-startés)
+Sortie   : results/rlhf_model/   (adaptateur LoRA RLHF)
 
-IMPORTANT : sur Kaggle T4×2, force un seul GPU pour éviter le sharding accelerate
-qui casse PPOTrainer. À mettre AVANT tout import torch :
+Conçu pour Kaggle T4 16 GB en bnb 4-bit. Charge simultanément quatre modèles
+(policy, ref, reward, value) dans le même GPU.
 
-    import os
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+IMPORTANT : sur Kaggle T4×2, exporter CUDA_VISIBLE_DEVICES=0 AVANT tout import
+torch — sinon accelerate distribue les modèles sur les deux GPU et casse
+PPOTrainer.
 
-Usage :
-    python training/train_ppo.py \
-        --dpo_adapter results/dpo_model \
-        --reward_model_path results/reward_model \
-        --data_path data/preferences.jsonl \
-        --output_dir results/rlhf_model
+Usage : python training/train_ppo.py --dpo_adapter results/dpo_model \\
+            --reward_model_path results/reward_model \\
+            --output_dir results/rlhf_model
 """
 
 import argparse
-import json
-import os
 import sys
 
 import torch
 from datasets import Dataset
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    AutoModelForSequenceClassification,
-    BitsAndBytesConfig,
-)
 from peft import PeftModel, prepare_model_for_kbit_training
+from transformers import AutoModelForCausalLM, AutoModelForSequenceClassification
 from trl import PPOConfig, PPOTrainer
 
-
-def get_bnb_config():
-    return BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
-    )
+from _common import (
+    BASE_MODEL, apply_chat_user, get_bnb_config, load_jsonl, load_tokenizer,
+)
 
 
-def load_models(args):
-    tok = AutoTokenizer.from_pretrained(args.model_name)
-    if tok.pad_token is None:
-        tok.pad_token = tok.eos_token
-
+def load_models(args, tokenizer):
     use_4bit = not args.no_4bit
     common_kw = dict(trust_remote_code=True, device_map={"": 0})
     if use_4bit:
@@ -76,7 +57,7 @@ def load_models(args):
     rm_base = AutoModelForSequenceClassification.from_pretrained(
         args.model_name, num_labels=1, **common_kw)
     if rm_base.config.pad_token_id is None:
-        rm_base.config.pad_token_id = tok.pad_token_id
+        rm_base.config.pad_token_id = tokenizer.pad_token_id
     reward_model = PeftModel.from_pretrained(rm_base, args.reward_model_path)
     reward_model.eval()
     for p in reward_model.parameters():
@@ -86,55 +67,48 @@ def load_models(args):
     value_base = AutoModelForSequenceClassification.from_pretrained(
         args.model_name, num_labels=1, **common_kw)
     if value_base.config.pad_token_id is None:
-        value_base.config.pad_token_id = tok.pad_token_id
+        value_base.config.pad_token_id = tokenizer.pad_token_id
     if use_4bit:
         value_base = prepare_model_for_kbit_training(value_base)
     value_model = PeftModel.from_pretrained(value_base, args.reward_model_path, is_trainable=True)
     value_model.train()
 
-    for name, m in [("policy", policy), ("ref", ref), ("reward", reward_model), ("value", value_model)]:
+    for name, m in [("policy", policy), ("ref", ref),
+                    ("reward", reward_model), ("value", value_model)]:
         devs = set(str(p.device) for p in m.parameters())
         print(f"  {name}: devices={devs}")
         if len(devs) > 1:
-            print(f"  WARNING: {name} is sharded. Set CUDA_VISIBLE_DEVICES=0 before launching.",
-                  file=sys.stderr)
+            print(f"  WARNING: {name} is sharded. "
+                  "Set CUDA_VISIBLE_DEVICES=0 before launching.", file=sys.stderr)
 
-    return policy, ref, reward_model, value_model, tok
+    return policy, ref, reward_model, value_model
 
 
-def load_prompts(data_path, tokenizer, max_prompt_length, n_prompts):
+def load_prompts(data_path: str, tokenizer, max_prompt_length: int, n_prompts: int):
     print(f"Loading prompts from {data_path}...")
-    prompts = []
-    with open(data_path, encoding="utf-8") as f:
-        for line in f:
-            try:
-                ex = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            p = ex.get("prompt", "").strip()
-            if p:
-                prompts.append(p)
+    rows = load_jsonl(data_path)
+    prompts = [r["prompt"].strip() for r in rows if r.get("prompt", "").strip()]
     prompts = list(dict.fromkeys(prompts))[:n_prompts]
     print(f"  -> {len(prompts)} unique prompts")
 
     def tok_fn(ex):
-        formatted = tokenizer.apply_chat_template(
-            [{"role": "user", "content": ex["prompt"]}],
-            tokenize=False, add_generation_prompt=True)
-        enc = tokenizer(formatted, truncation=True, max_length=max_prompt_length, padding=False)
+        enc = tokenizer(
+            apply_chat_user(tokenizer, ex["prompt"]),
+            truncation=True, max_length=max_prompt_length, padding=False,
+        )
         return {"input_ids": enc["input_ids"]}
 
-    ds = Dataset.from_dict({"prompt": prompts}).map(tok_fn, remove_columns=["prompt"])
-    return ds
+    return Dataset.from_dict({"prompt": prompts}).map(tok_fn, remove_columns=["prompt"])
 
 
 def train_ppo(args):
     if torch.cuda.device_count() > 1:
         print(f"WARNING: {torch.cuda.device_count()} GPUs visible. "
-              f"Set CUDA_VISIBLE_DEVICES=0 BEFORE importing torch.", file=sys.stderr)
+              "Set CUDA_VISIBLE_DEVICES=0 BEFORE importing torch.", file=sys.stderr)
 
-    policy, ref, reward_model, value_model, tok = load_models(args)
-    train_ds = load_prompts(args.data_path, tok, args.max_prompt_length, args.n_prompts)
+    tokenizer = load_tokenizer(args.model_name)
+    policy, ref, reward_model, value_model = load_models(args, tokenizer)
+    train_ds = load_prompts(args.data_path, tokenizer, args.max_prompt_length, args.n_prompts)
 
     config = PPOConfig(
         output_dir=args.output_dir,
@@ -159,7 +133,7 @@ def train_ppo(args):
 
     trainer = PPOTrainer(
         config=config,
-        processing_class=tok,
+        processing_class=tokenizer,
         policy=policy,
         ref_policy=ref,
         reward_model=reward_model,
@@ -170,13 +144,13 @@ def train_ppo(args):
     print("Starting PPO training (TRL 0.12 API)...")
     trainer.train()
     trainer.save_model(args.output_dir)
-    tok.save_pretrained(args.output_dir)
+    tokenizer.save_pretrained(args.output_dir)
     print(f"Saved -> {args.output_dir}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-1.5B-Instruct")
+    parser.add_argument("--model_name", type=str, default=BASE_MODEL)
     parser.add_argument("--dpo_adapter", type=str, default="results/dpo_model")
     parser.add_argument("--reward_model_path", type=str, default="results/reward_model")
     parser.add_argument("--data_path", type=str, default="data/preferences.jsonl")

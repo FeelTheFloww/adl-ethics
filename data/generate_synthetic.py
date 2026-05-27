@@ -1,26 +1,10 @@
-"""
-data/generate_synthetic.py
-──────────────────────────
-Génère des paires de préférences (chosen/rejected) au format proche d'ETHICS
-en utilisant un LLM externe via API. C'est l'option "data quality" du sujet.
+"""Génère des paires de préférences (chosen/rejected) au format proche d'ETHICS via
+un LLM externe. Aucun exemple d'ETHICS n'est utilisé en entrée.
 
-L'idée : produire des scénarios moraux courts + un raisonnement éthique correct
-(chosen) et un raisonnement incorrect/superficiel (rejected). Cela aligne le
-format d'entraînement avec le format d'évaluation ETHICS.
+Providers : anthropic / openai / groq — clé API via ANTHROPIC_API_KEY,
+OPENAI_API_KEY ou GROQ_API_KEY.
 
-IMPORTANT : aucun exemple d'ETHICS n'est utilisé en entrée — uniquement des
-catégories abstraites (utilitarisme, déontologie, etc.) pour guider la
-génération.
-
-Provider supporté : "anthropic" (Claude Haiku, recommandé pour le coût) ou "openai".
-
-Variables d'env requises :
-  - ANTHROPIC_API_KEY  (si provider=anthropic)
-  - OPENAI_API_KEY     (si provider=openai)
-
-Usage :
-  python data/generate_synthetic.py --provider anthropic --n 3000 \
-    --out_path data/synthetic_ethics.jsonl
+Usage : python data/generate_synthetic.py --provider anthropic --n 3000
 """
 
 import argparse
@@ -78,7 +62,7 @@ Output exactly this JSON shape (no other text):
 {{"prompt": "...", "chosen": "...", "rejected": "..."}}"""
 
 
-# ── Providers ────────────────────────────────────────────────────────────────
+# Providers
 def call_anthropic(system: str, user: str, model: str = "claude-haiku-4-5-20251001") -> Optional[str]:
     import anthropic
     client = anthropic.Anthropic()
@@ -106,7 +90,7 @@ def call_openai(system: str, user: str, model: str = "gpt-4o-mini") -> Optional[
 
 
 def call_groq(system: str, user: str, model: str = "llama-3.3-70b-versatile") -> Optional[str]:
-    """Groq free tier: ~14K requests/day, Llama-3.3-70B, very fast."""
+    """Groq free tier (Llama-3.3-70B), API compatible OpenAI."""
     from openai import OpenAI
     client = OpenAI(
         api_key=os.environ.get("GROQ_API_KEY"),
@@ -134,21 +118,18 @@ def call_llm(provider: str, system: str, user: str) -> Optional[str]:
     raise ValueError(f"Unknown provider: {provider}")
 
 
-# ── Parsing ──────────────────────────────────────────────────────────────────
+# Parsing
 def parse_pair(raw: str) -> Optional[dict]:
-    """Extracts the JSON object from the LLM output."""
+    """Extrait l'objet JSON de la sortie du LLM."""
     raw = (raw or "").strip()
-    # strip code fences
-    if raw.startswith("```"):
+    if raw.startswith("```"):  # retire les fences markdown
         raw = raw.strip("`")
-        # remove a leading 'json' word if present
         if raw.lstrip().lower().startswith("json"):
             raw = raw.lstrip()[4:]
     try:
         obj = json.loads(raw)
     except json.JSONDecodeError:
-        # try to extract first JSON object
-        try:
+        try:  # repli : extrait le premier objet JSON
             start = raw.index("{")
             end = raw.rindex("}") + 1
             obj = json.loads(raw[start:end])
@@ -163,7 +144,6 @@ def parse_pair(raw: str) -> Optional[dict]:
             "rejected": obj["rejected"].strip()}
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--provider", choices=["anthropic", "openai", "groq"], default="groq")
@@ -176,7 +156,7 @@ def main():
     random.seed(args.seed)
     os.makedirs(os.path.dirname(args.out_path) or ".", exist_ok=True)
 
-    # Append mode so we can resume
+    # Mode append : permet de reprendre une génération interrompue
     existing = 0
     if os.path.exists(args.out_path):
         with open(args.out_path, encoding="utf-8") as f:

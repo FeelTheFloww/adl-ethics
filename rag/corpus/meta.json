@@ -1,5 +1,0 @@
-{
-  "embedder": "BAAI/bge-small-en",
-  "n_docs": 21,
-  "dim": 384
-}

@@ -1,22 +1,7 @@
-"""
-data/prepare_preferences.py
-───────────────────────────
-Construit le jeu hybride de paires de préférences pour DPO/RM/PPO.
+"""Construit le jeu hybride de paires de préférences (PKU-SafeRLHF + UltraFeedback
++ synthétique optionnel) pour DPO/RM/PPO. Sortie JSONL : prompt/chosen/rejected/source.
 
-Composition :
-  1. PKU-SafeRLHF       — préférences humaines safety-oriented
-  2. UltraFeedback      — préférences générales haute qualité
-  3. Synthétique éthique — (optionnel) format aligné sur ETHICS (généré séparément)
-
-Format de sortie (JSONL) :
-  {"prompt": str, "chosen": str, "rejected": str, "source": "pku|ultra|synth"}
-
-Le prompt est formaté plus tard avec le chat template du tokenizer dans les scripts
-d'entraînement, donc on garde ici les textes bruts.
-
-Usage:
-  python data/prepare_preferences.py --n_pku 10000 --n_ultra 5000 --out_path data/preferences.jsonl
-  python data/prepare_preferences.py --include_synthetic data/synthetic_ethics.jsonl
+Usage : python data/prepare_preferences.py --n_pku 10000 --n_ultra 5000
 """
 
 import argparse
@@ -38,12 +23,9 @@ def write_jsonl(path: str, rows: Iterable[dict]):
     return n
 
 
-# ── Source 1 : PKU-SafeRLHF ───────────────────────────────────────────────────
+# Source 1 : PKU-SafeRLHF
 def load_pku_pairs(n_samples: int) -> list[dict]:
-    """
-    PKU-SafeRLHF a deux dimensions (better_response_id et safer_response_id).
-    On utilise safer_response_id pour orienter vers la safety/ethics.
-    """
+    """Charge PKU-SafeRLHF en utilisant safer_response_id (orientation safety/ethics)."""
     print(f"[PKU] Loading PKU-Alignment/PKU-SafeRLHF (target n={n_samples})…")
     try:
         ds = load_dataset("PKU-Alignment/PKU-SafeRLHF", split="train")
@@ -53,7 +35,6 @@ def load_pku_pairs(n_samples: int) -> list[dict]:
 
     rows = []
     for ex in ds:
-        # Format PKU : prompt, response_0, response_1, safer_response_id (0/1)
         safer_id = ex.get("safer_response_id")
         if safer_id not in (0, 1):
             continue
@@ -76,11 +57,9 @@ def load_pku_pairs(n_samples: int) -> list[dict]:
     return rows
 
 
-# ── Source 2 : UltraFeedback ──────────────────────────────────────────────────
+# Source 2 : UltraFeedback
 def load_ultrafeedback_pairs(n_samples: int) -> list[dict]:
-    """
-    UltraFeedback (binarized) — paires chosen/rejected déjà formées.
-    """
+    """Charge UltraFeedback (binarized) — paires chosen/rejected déjà formées."""
     print(f"[Ultra] Loading argilla/ultrafeedback-binarized-preferences (target n={n_samples})…")
     try:
         ds = load_dataset("argilla/ultrafeedback-binarized-preferences", split="train")
@@ -97,9 +76,7 @@ def load_ultrafeedback_pairs(n_samples: int) -> list[dict]:
         if "chosen" in ex and "rejected" in ex:
             chosen = ex["chosen"]
             rejected = ex["rejected"]
-            # Si format chat (list[dict]) on prend le dernier message assistant
-            if isinstance(chosen, list):
-                # extract prompt from user msgs and last assistant content
+            if isinstance(chosen, list):  # format chat : dernier message assistant
                 user_msgs = [m["content"] for m in chosen if m.get("role") == "user"]
                 prompt = user_msgs[-1] if user_msgs else ""
                 chosen_text = next((m["content"] for m in reversed(chosen) if m.get("role") == "assistant"), "")
@@ -132,7 +109,7 @@ def load_ultrafeedback_pairs(n_samples: int) -> list[dict]:
     return rows
 
 
-# ── Source 3 : Synthétique éthique (depuis un JSONL externe) ─────────────────
+# Source 3 : Synthétique éthique (JSONL externe)
 def load_synthetic_pairs(path: str) -> list[dict]:
     if not path or not os.path.exists(path):
         print(f"[Synth] No file at {path}, skipping.")
@@ -153,7 +130,7 @@ def load_synthetic_pairs(path: str) -> list[dict]:
     return rows
 
 
-# ── Filtrage qualité ──────────────────────────────────────────────────────────
+# Filtrage qualité
 def filter_pair(p: dict, min_len: int = 5, max_len: int = 2000) -> bool:
     for k in ("prompt", "chosen", "rejected"):
         text = p.get(k, "")
@@ -165,7 +142,6 @@ def filter_pair(p: dict, min_len: int = 5, max_len: int = 2000) -> bool:
     return True
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--n_pku", type=int, default=10000)
@@ -190,7 +166,6 @@ def main():
     random.shuffle(all_rows)
     n = write_jsonl(args.out_path, all_rows)
     print(f"Wrote {n} pairs to {args.out_path}")
-    # Petit récap par source
     by_source = {}
     for r in all_rows:
         by_source[r["source"]] = by_source.get(r["source"], 0) + 1

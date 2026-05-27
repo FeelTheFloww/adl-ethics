@@ -1,76 +1,48 @@
-"""
-training/train_dpo.py
-─────────────────────
-DPO QLoRA sur Qwen2.5-1.5B avec les données de préférence hybrides.
+"""Étape DPO du pipeline d'alignement.
 
-Usage :
-  python training/train_dpo.py --data_path data/preferences.jsonl
+Pipeline : (1) data  →  [2] DPO  →  (3) reward model  →  (4) PPO  →  (5) eval
+Entrée   : data/preferences.jsonl
+Sortie   : results/dpo_model/  (adaptateur LoRA bf16)
+
+Usage : python training/train_dpo.py --data_path data/preferences.jsonl
 """
 
 import argparse
-import json
-import os
 
 import torch
 from datasets import Dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from peft import LoraConfig, get_peft_model
-from trl import DPOTrainer, DPOConfig
+from peft import TaskType, get_peft_model
+from transformers import AutoModelForCausalLM
+from trl import DPOConfig, DPOTrainer
+
+from _common import (
+    BASE_MODEL, apply_chat_user, load_jsonl, load_tokenizer, make_lora_config,
+)
 
 
-def get_lora_config():
-    return LoraConfig(
-        r=16,
-        lora_alpha=32,
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
-        lora_dropout=0.05,
-        bias="none",
-        task_type="CAUSAL_LM",
-    )
-
-
-def load_model_for_dpo(model_name):
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
+def load_model_for_dpo(model_name: str):
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=torch.bfloat16,
         device_map="auto",
         trust_remote_code=True,
     )
-    model = get_peft_model(model, get_lora_config())
+    model = get_peft_model(model, make_lora_config(TaskType.CAUSAL_LM))
     model.print_trainable_parameters()
-    return model, tokenizer
+    return model
 
 
-def format_with_chat_template(example, tokenizer):
-    prompt_text = example["prompt"]
-    formatted_prompt = tokenizer.apply_chat_template(
-        [{"role": "user", "content": prompt_text}],
-        tokenize=False,
-        add_generation_prompt=True,
-    )
-    return {
-        "prompt": formatted_prompt,
-        "chosen": example["chosen"],
-        "rejected": example["rejected"],
-    }
-
-
-def load_preferences(data_path, tokenizer, eval_ratio=0.05):
+def load_preferences(data_path: str, tokenizer, eval_ratio: float = 0.05):
     print(f"Loading preferences from {data_path}...")
-    rows = []
-    with open(data_path, encoding="utf-8") as f:
-        for line in f:
-            try:
-                rows.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
+    rows = load_jsonl(data_path)
     print(f"  -> {len(rows)} raw pairs")
     ds = Dataset.from_list(rows)
     ds = ds.map(
-        lambda ex: format_with_chat_template(ex, tokenizer),
+        lambda ex: {
+            "prompt": apply_chat_user(tokenizer, ex["prompt"]),
+            "chosen": ex["chosen"],
+            "rejected": ex["rejected"],
+        },
         remove_columns=[c for c in ds.column_names if c not in ("prompt", "chosen", "rejected")],
     )
     split = ds.train_test_split(test_size=eval_ratio, seed=42)
@@ -79,7 +51,8 @@ def load_preferences(data_path, tokenizer, eval_ratio=0.05):
 
 
 def train_dpo(args):
-    model, tokenizer = load_model_for_dpo(args.model_name)
+    tokenizer = load_tokenizer(args.model_name)
+    model = load_model_for_dpo(args.model_name)
     train_ds, eval_ds = load_preferences(args.data_path, tokenizer)
 
     training_args = DPOConfig(
@@ -122,7 +95,7 @@ def train_dpo(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_name", type=str, default="Qwen/Qwen2.5-1.5B-Instruct")
+    parser.add_argument("--model_name", type=str, default=BASE_MODEL)
     parser.add_argument("--data_path", type=str, default="data/preferences.jsonl")
     parser.add_argument("--output_dir", type=str, default="results/dpo_model")
     parser.add_argument("--epochs", type=float, default=1.0)

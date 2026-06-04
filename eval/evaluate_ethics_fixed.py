@@ -43,13 +43,73 @@ import random
 from collections import Counter
 from typing import Any
 
+import csv
+import urllib.request
+import tarfile
+
 import torch
-from datasets import load_dataset
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 BASE_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
 CATEGORIES = ["commonsense", "deontology", "justice", "virtue", "utilitarianism"]
+
+ETHICS_URL = "https://people.eecs.berkeley.edu/~hendrycks/ethics.tar"
+
+# Fichiers CSV (partition test) du tarball officiel ETHICS, par catégorie.
+ETHICS_FILES = {
+    "commonsense":    "commonsense/cm_test.csv",
+    "deontology":     "deontology/deontology_test.csv",
+    "justice":        "justice/justice_test.csv",
+    "virtue":         "virtue/virtue_test.csv",
+    "utilitarianism": "utilitarianism/util_test.csv",
+}
+
+
+def ensure_ethics(root: str) -> str:
+    """Télécharge + décompresse le tarball officiel ETHICS si absent. Renvoie le
+    dossier contenant les sous-dossiers de catégories.
+
+    Évite toute dépendance à `datasets` (les versions récentes ne supportent plus
+    les datasets à script comme hendrycks/ethics)."""
+    # cherche un dossier déjà présent contenant commonsense/cm_test.csv
+    for cand in [root, os.path.join(root, "ethics")]:
+        if os.path.isfile(os.path.join(cand, ETHICS_FILES["commonsense"])):
+            return cand
+    os.makedirs(root, exist_ok=True)
+    tar_path = os.path.join(root, "ethics.tar")
+    if not os.path.isfile(tar_path):
+        print(f"Téléchargement d'ETHICS depuis {ETHICS_URL} …")
+        urllib.request.urlretrieve(ETHICS_URL, tar_path)
+    with tarfile.open(tar_path) as t:
+        t.extractall(root)
+    base = os.path.join(root, "ethics")
+    return base if os.path.isdir(base) else root
+
+
+def load_ethics_csv(category: str, root: str) -> list[dict]:
+    """Charge une catégorie ETHICS depuis le CSV officiel -> liste de dicts
+    compatibles avec make_prompt / get_label."""
+    path = os.path.join(root, ETHICS_FILES[category])
+    rows: list[dict] = []
+    with open(path, newline="", encoding="utf-8") as f:
+        if category == "utilitarianism":
+            # util : 2 colonnes SANS en-tête (baseline plus plaisant, less_pleasant)
+            for r in csv.reader(f):
+                if len(r) >= 2 and r[0].strip():
+                    rows.append({"baseline": r[0], "less_pleasant": r[1]})
+        else:
+            reader = csv.DictReader(f)
+            for r in reader:
+                d = {"label": r.get("label")}
+                if category == "commonsense":
+                    d["input"] = r.get("input", "")
+                else:  # deontology / justice / virtue
+                    d["scenario"] = r.get("scenario", "")
+                    if category == "deontology":
+                        d["excuse"] = r.get("excuse", "")
+                rows.append(d)
+    return rows
 
 
 # --------------------------------------------------------------------------- #
@@ -309,6 +369,8 @@ def main():
     ap.add_argument("--ethical_corpus", default=None)
     ap.add_argument("--output_path", default="results/eval_results_fixed.json")
     ap.add_argument("--n_per_cat", type=int, default=100)
+    ap.add_argument("--ethics_root", default="/kaggle/working/ethics_data",
+                    help="Dossier où télécharger/extraire le tarball ETHICS officiel.")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--rag_k", type=int, default=3)
     ap.add_argument("--skip_baseline", action="store_true")
@@ -318,12 +380,13 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     os.makedirs(os.path.dirname(args.output_path) or ".", exist_ok=True)
 
+    ethics_root = ensure_ethics(args.ethics_root)
+    print(f"ETHICS root: {ethics_root}")
     ex_by_cat = {}
     for cat in CATEGORIES:
         try:
-            ds = load_dataset("hendrycks/ethics", cat, split="test", trust_remote_code=True)
-            ex_by_cat[cat] = list(ds)
-            print(f"  {cat}: {len(ex_by_cat[cat])} | fields={list(ds.features.keys())}")
+            ex_by_cat[cat] = load_ethics_csv(cat, ethics_root)
+            print(f"  {cat}: {len(ex_by_cat[cat])} exemples")
         except Exception as e:
             print(f"  {cat}: FAILED ({e})")
             ex_by_cat[cat] = []

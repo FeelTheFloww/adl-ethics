@@ -90,6 +90,10 @@ def main():
 
     base_preds = concat_preds(data[args.baseline_key])
     n = len(base_preds)
+    if n == 0:
+        print("Aucune prédiction trouvée — l'éval n'a produit aucun exemple "
+              "(vérifie le chargement d'ETHICS dans evaluate_ethics_fixed.py).")
+        return
     k = sum(base_preds)
     lo, hi = wilson_ci(k, n)
     print(f"\nBaseline accuracy = {k}/{n} = {k/n:.3f}  "

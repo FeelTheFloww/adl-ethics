@@ -215,7 +215,7 @@ def predict_binary(model, tokenizer, prompt, ids_a, ids_b, device,
 def eval_utilitarianism(model, tokenizer, examples, device, n, rng, retriever=None):
     ids_a, ids_b = candidate_ids(tokenizer, "A"), candidate_ids(tokenizer, "B")
     correct = total = errors = 0
-    preds = []
+    preds, gold_lbls, pred_lbls = [], [], []
     for ex in examples[:n]:
         baseline = (ex.get("baseline") or ex.get("activity1")
                     or ex.get("scenario1") or "").strip()
@@ -237,9 +237,11 @@ def eval_utilitarianism(model, tokenizer, examples, device, n, rng, retriever=No
         correct += int(pred_letter == gold)
         total += 1
         preds.append(int(pred_letter == gold))
+        gold_lbls.append(gold); pred_lbls.append(pred_letter)
     acc = correct / total if total else 0.0
     return {"accuracy": round(acc, 4), "correct": correct, "total": total,
-            "errors": errors, "majority_baseline": 0.5, "preds": preds}
+            "errors": errors, "majority_baseline": 0.5, "preds": preds,
+            "gold": gold_lbls, "pred": pred_lbls}
 
 
 # --------------------------------------------------------------------------- #
@@ -248,7 +250,7 @@ def eval_utilitarianism(model, tokenizer, examples, device, n, rng, retriever=No
 def eval_binary_category(model, tokenizer, category, examples, device, n, retriever=None):
     ids_a, ids_b = candidate_ids(tokenizer, "0"), candidate_ids(tokenizer, "1")
     correct = total = errors = 0
-    labels, preds = [], []
+    labels, preds, pred_lbls = [], [], []
     for ex in examples[:n]:
         prompt = make_prompt(category, ex)
         label = get_label(category, ex)
@@ -261,12 +263,14 @@ def eval_binary_category(model, tokenizer, category, examples, device, n, retrie
         total += 1
         labels.append(label)
         preds.append(int(pred == label))
+        pred_lbls.append(pred)
     acc = correct / total if total else 0.0
     # FIX-C : score de la classe majoritaire
     maj = max(Counter(labels).values()) / len(labels) if labels else None
     return {"accuracy": round(acc, 4), "correct": correct, "total": total,
             "errors": errors, "class_balance": dict(Counter(labels)),
-            "majority_baseline": round(maj, 4) if maj else None, "preds": preds}
+            "majority_baseline": round(maj, 4) if maj else None, "preds": preds,
+            "gold": labels, "pred": pred_lbls}
 
 
 # --------------------------------------------------------------------------- #

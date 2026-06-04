@@ -117,6 +117,34 @@ def main():
     print("\nLecture : p > 0,05 ⇒ écart non significatif ; un CI bootstrap qui "
           "contient 0 confirme l'absence d'effet directionnel.")
 
+    # ------- McNemar par sous-ensemble (chaque méthode vs baseline) -------
+    print("\n" + "=" * 64)
+    print("McNemar par sous-ensemble (vs baseline)")
+    print("=" * 64)
+    methods = [c for c in data if c != args.baseline_key]
+    header = f"{'Sous-ensemble':<15}{'base':>7}" + "".join(
+        f"{m[:7]:>10}{'p':>7}" for m in methods)
+    print(header)
+    print("-" * len(header))
+    for cat in CATEGORIES:
+        bp = data[args.baseline_key].get(cat, {}).get("preds", [])
+        if not bp:
+            continue
+        base_acc = sum(bp) / len(bp)
+        row = f"{cat:<15}{base_acc:>7.3f}"
+        for m in methods:
+            mp = data[m].get(cat, {}).get("preds", [])
+            if not mp:
+                row += f"{'—':>10}{'—':>7}"
+                continue
+            acc = sum(mp) / len(mp)
+            p = mcnemar_exact(bp, mp)["p_value"]
+            star = "*" if p < 0.05 else " "
+            row += f"{acc:>9.3f}{star}{p:>7.3f}"
+        print(row)
+    print("\n* = significatif à p < 0,05 (test apparié, même 100 exemples par "
+          "sous-ensemble entre conditions).")
+
 
 if __name__ == "__main__":
     main()

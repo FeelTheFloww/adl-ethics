@@ -2,6 +2,8 @@
 
 **English** | [Français](README.fr.md)
 
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white) ![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white) ![Hugging Face](https://img.shields.io/badge/🤗_Transformers-FFD21E?logoColor=black) ![Kaggle](https://img.shields.io/badge/Kaggle-20BEFF?logo=kaggle&logoColor=white)
+
 Comparison of three alignment strategies (DPO, RLHF via PPO, RAG) on the ETHICS benchmark (Hendrycks et al., 2021), using **Qwen2.5-1.5B-Instruct** as the base model.
 
 > **Key finding**: none of the methods significantly improves on the base model (64.6% overall accuracy). The model's prior instruction tuning creates a ceiling effect that limits any room for improvement, regardless of the alignment method. The PPO pipeline diverges under 4-bit quantization (KL ~110 vs. target < 0.5). RAG shows the clearest signal on utilitarianism (+6 pts) but regresses on virtue (−4 pts).
@@ -190,3 +192,12 @@ Evaluated conditions: `baseline`, `dpo`, `rlhf`, `rag`.
 | PPO sharding on Kaggle T4×2 | `accelerate` detects 2 GPUs | `os.environ["CUDA_VISIBLE_DEVICES"] = "0"` |
 | `UnicodeEncodeError` JSON | Windows cp1252 | All `open()` calls use `encoding="utf-8"` |
 | OOM DPO/RM batch=4 on T4 | bf16 without bnb on Qwen 1.5B | `--batch_size 1 --grad_accum 16 --max_length 384` |
+
+---
+
+## 🗺️ Roadmap
+
+- [ ] PPO in full bf16 (no 4-bit quantization) on larger GPUs to isolate the quantization-noise hypothesis
+- [ ] Scale study: repeat the comparison on 3B / 7B base models
+- [ ] Multi-seed runs with confidence intervals
+- [ ] Extended RAG corpus and retriever ablations (k, embedder choice)
